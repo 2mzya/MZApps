@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -130,6 +131,9 @@
     const status = document.getElementById("status");
     const apps = document.getElementById("apps");
 
+    let allFiles = [];
+    let currentPath = "";
+
     async function loadApps() {
       try {
         const repoResponse = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}`);
@@ -143,56 +147,150 @@
         if (!treeResponse.ok) throw new Error("Unable to load repository files.");
         const tree = await treeResponse.json();
 
-        const files = (tree.tree || [])
+        allFiles = (tree.tree || [])
           .filter(file =>
-            file.type === "blob" &&
             file.path.toLowerCase() !== "index.html" &&
-            !file.path.startsWith(".github/")
+            !file.path.startsWith(".github/") &&
+            (file.type === "blob" || file.type === "tree")
           )
-          .sort((a, b) => a.path.localeCompare(b.path));
+          .map(file => file.path);
 
         status.textContent = "";
+        renderFolder("");
 
-        if (!files.length) {
-          status.textContent = "No applications available.";
-          return;
-        }
-
-        let index = 0;
-        for (const file of files) {
-          const link = document.createElement("a");
-          link.className = "app";
-
-          const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
-          link.href = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${encodeURIComponent(branch)}/${encodedPath}`;
-          link.setAttribute("download", file.path.split("/").pop());
-          link.title = `Download ${file.path}`;
-
-          const num = document.createElement("span");
-          num.className = "app-num";
-          num.textContent = String(++index).padStart(2, "0");
-
-          const text = document.createElement("span");
-          text.className = "app-text";
-
-          const name = document.createElement("span");
-          name.className = "app-name";
-          name.textContent = file.path.split("/").pop();
-
-          const path = document.createElement("span");
-          path.className = "app-path";
-          path.textContent = file.path;
-
-          const arrow = document.createElement("span");
-          arrow.className = "app-arrow";
-          arrow.textContent = "↓";
-
-          text.append(name, path);
-          link.append(num, text, arrow);
-          apps.appendChild(link);
-        }
       } catch (error) {
         status.textContent = error.message || "Unable to load applications.";
+      }
+    }
+
+    function renderFolder(path) {
+      currentPath = path;
+      apps.innerHTML = "";
+
+      const folders = new Set();
+      const files = [];
+
+      allFiles.forEach(filePath => {
+        if (!filePath.startsWith(path ? path + "/" : "")) return;
+
+        const relativePath = path
+          ? filePath.slice(path.length + 1)
+          : filePath;
+
+        const parts = relativePath.split("/");
+
+        if (parts.length > 1) {
+          folders.add(parts[0]);
+        } else {
+          files.push(filePath);
+        }
+      });
+
+      let index = 0;
+
+      if (path) {
+        const back = document.createElement("a");
+        back.className = "app";
+        back.href = "#";
+        back.innerHTML = `
+          <span class="app-num">←</span>
+          <span class="app-text">
+            <span class="app-name">Back</span>
+            <span class="app-path">Previous folder</span>
+          </span>
+          <span class="app-arrow">↑</span>
+        `;
+
+        back.addEventListener("click", event => {
+          event.preventDefault();
+          const parent = path.split("/").slice(0, -1).join("/");
+          renderFolder(parent);
+        });
+
+        apps.appendChild(back);
+      }
+
+      [...folders].sort((a, b) => a.localeCompare(b)).forEach(folder => {
+        const folderPath = path ? path + "/" + folder : folder;
+
+        const link = document.createElement("a");
+        link.className = "app";
+        link.href = "#";
+
+        const num = document.createElement("span");
+        num.className = "app-num";
+        num.textContent = String(++index).padStart(2, "0");
+
+        const text = document.createElement("span");
+        text.className = "app-text";
+
+        const name = document.createElement("span");
+        name.className = "app-name";
+        name.textContent = "📁 " + folder;
+
+        const folderInfo = document.createElement("span");
+        folderInfo.className = "app-path";
+        folderInfo.textContent = folderPath + "/";
+
+        const arrow = document.createElement("span");
+        arrow.className = "app-arrow";
+        arrow.textContent = "→";
+
+        text.append(name, folderInfo);
+        link.append(num, text, arrow);
+
+        link.addEventListener("click", event => {
+          event.preventDefault();
+          renderFolder(folderPath);
+        });
+
+        apps.appendChild(link);
+      });
+
+      files.sort((a, b) => a.localeCompare(b)).forEach(filePath => {
+        const fileName = filePath.split("/").pop();
+
+        const link = document.createElement("a");
+        link.className = "app";
+
+        const encodedPath = filePath
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/");
+
+        link.href = `https://${OWNER}.github.io/${REPO}/${encodedPath}`;
+        link.setAttribute("download", fileName);
+        link.title = `Download ${filePath}`;
+
+        const num = document.createElement("span");
+        num.className = "app-num";
+        num.textContent = String(++index).padStart(2, "0");
+
+        const text = document.createElement("span");
+        text.className = "app-text";
+
+        const name = document.createElement("span");
+        name.className = "app-name";
+        name.textContent = fileName;
+
+        const fileInfo = document.createElement("span");
+        fileInfo.className = "app-path";
+        fileInfo.textContent = filePath;
+
+        const arrow = document.createElement("span");
+        arrow.className = "app-arrow";
+        arrow.textContent = "↓";
+
+        text.append(name, fileInfo);
+        link.append(num, text, arrow);
+
+        apps.appendChild(link);
+      });
+
+      if (!folders.size && !files.length) {
+        status.textContent = "No applications available.";
+      } else {
+        status.textContent = "";
       }
     }
 
