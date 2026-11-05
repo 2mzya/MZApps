@@ -148,9 +148,9 @@
 
         allFiles = (tree.tree || [])
           .filter(file =>
+            file.type === "blob" &&
             file.path.toLowerCase() !== "index.html" &&
-            !file.path.startsWith(".github/") &&
-            (file.type === "blob" || file.type === "tree")
+            !file.path.startsWith(".github/")
           )
           .map(file => file.path);
 
